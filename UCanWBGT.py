@@ -292,10 +292,11 @@ def saturation_specific_humidity(p, T):
 
     return qs
 
-def Twb_NEWT_func(T,RH,q,P,Twb_method):
+def Twb_thermo_func(T,RH,q,P,Twb_method):
     """
-    NEWT wet bulb temperature calculation. 
-    Uses adiabatic_wet_bulb_temperature or isobaric_wet_bulb_temperature from https://github.com/robwarrenwx/atmos/blob/main/atmos/thermo.py.
+    thermo wet bulb temperature calculation. 
+    Uses adiabatic_wet_bulb_temperature ("NEWT") or isobaric_wet_bulb_temperature from 
+    https://github.com/robwarrenwx/atmos/blob/main/atmos/thermo.py.
     All calculations assume liquid phase.
 
     Adiabatic (or pseudo) wet-bulb temperature is the temperature of a parcel
@@ -316,19 +317,19 @@ def Twb_NEWT_func(T,RH,q,P,Twb_method):
     - In the WBGT equation isobaric Twb (rather than adiabatic Twb) makes sense to use physically since humans/wet bulbs are cooling through evaporation at 
       constant pressure
     - However, isobaric Twb is only a small fraction of a degree different from adiabatic Twb, particularly for larger RH values 
-      (NEWT adiabatic Twb is smaller than NEWT isobaric Twb, but only by <0.5 degC for RH>30%) 
+      (thermo adiabatic Twb is smaller than thermo isobaric Twb, but only by <0.5 degC for RH>30%) 
     - In the literature, Twb in the WBGT equation is commonly referred to as the natural (unventilated) Twb. This is also the thermodynamic (or isobaric) Twb.
       Another type of Twb which should not be used is the psychometric (or aspirated) Twb.
       (https://uploads-ssl.webflow.com/5dcd0bc3137dcb207a26c19a/5dce09a27dad12e3934ef849_v02-calculation-of-the-natural-unventilated-wet-bulb-temperature.pdf)
     - Stull (2011) tends to overestimate Twb at high T and low/moderate RH by ~1 degC
-    - NEWT_isobaric is recommended but may take longer than NEWT_adiabatic and Stull
+    - thermo_isobaric is recommended but may take longer as unliken thermo_adiabatic and Stull it is iterative
 
     Arguments:
     - T (air temperature; degC)
     - RH (relative humidity; %)
     - q (specifc humidity; kg kg-1)
     - P (surface pressure; Pa)
-    - Twb_method (whether to use `NEWT_adiabatic` or `NEWT_isobaric`)
+    - Twb_method (whether to use `thermo_adiabatic` or `thermo_isobaric`)
 
     Returns:
     - Twb (wet bulb temperature; degC)
@@ -338,7 +339,7 @@ def Twb_NEWT_func(T,RH,q,P,Twb_method):
     T = T + 273.15
     RH = RH / 100.
 
-    if Twb_method == 'NEWT_adiabatic':
+    if Twb_method == 'thermo_adiabatic':
 
         # Get pressure and temperature at the LCL
         p_lcl, T_lcl = lifting_condensation_level(P, T, q, RH)
@@ -346,7 +347,7 @@ def Twb_NEWT_func(T,RH,q,P,Twb_method):
         # Follow a pseudoadiabat from the LCL to the original pressure
         Twb = follow_moist_adiabat(p_lcl, P, T_lcl)
 
-    elif Twb_method == 'NEWT_isobaric':
+    elif Twb_method == 'thermo_isobaric':
 
         # Compute dewpoint temperature
         Td = dewpoint_temperature_from_relative_humidity(T, RH)
@@ -397,7 +398,7 @@ def Twb_NEWT_func(T,RH,q,P,Twb_method):
                     break
     
     else:
-        sys.exit("!!! Twb_NEWT_func -- Twb_method should be NEWT_adibatic or NEWT_isobaric !!!")
+        sys.exit("!!! Twb_thermo_func -- Twb_method should be thermo_adibatic or thermo_isobaric !!!")
 
     # Return Twb converted to degC
     return Twb - 273.15
@@ -405,25 +406,25 @@ def Twb_NEWT_func(T,RH,q,P,Twb_method):
 def Twb_func(T,RH,q,P,Twb_method):
     """
     Calculate wet bulb temperature using Stull (2011) or 
-    NEWT https://github.com/robwarrenwx/atmos/blob/main/atmos/thermo.py.
+    thermo https://github.com/robwarrenwx/atmos/blob/main/atmos/thermo.py.
 
     Arguments:
     - T (air temperature; degC)
     - RH (relative humidity; %)
     - q (specifc humidity; kg kg-1)
     - P (surface pressure; Pa)
-    - Twb_method (whether to use `NEWT_adiabatic`, `NEWT_isobaric`, or `Stull` (2011) method)
+    - Twb_method (whether to use `thermo_adiabatic`, `thermo_isobaric`, or `Stull` (2011) method)
 
     Returns:
     - Twb (wet bulb temperature; degC)
     """
 
-    if Twb_method == 'NEWT_adiabatic' or Twb_method == 'NEWT_isobaric':
-        Twb = Twb_NEWT_func(T,RH,q,P,Twb_method)
+    if Twb_method == 'thermo_adiabatic' or Twb_method == 'thermo_isobaric':
+        Twb = Twb_thermo_func(T,RH,q,P,Twb_method)
     elif Twb_method == 'Stull':
         Twb = Twb_Stull_func(T,RH)
     else:
-        sys.exit("!!! Twb_func -- Twb_method should be NEWT_adibatic, NEWT_isobaric, or Stull !!!")
+        sys.exit("!!! Twb_func -- Twb_method should be thermo_adibatic, thermo_isobaric, or Stull !!!")
 
     return Twb
 
@@ -1052,7 +1053,8 @@ def main(
     - nref (defines the number of shortwave diffuse reflections as nref and the number of shortwave direct reflections as nref+1)
     - gamma_choice (whether to use: a gamma that is `prescribed` or modelled using `LAI`)
     - WBGT_equation_choice (whether to use: the `full` or approximate `ISO` WBGT equation)
-    - Twb_method (whether to use: the `Stull` (2011) or `NEWT` https://github.com/robwarrenwx/atmos/blob/main/atmos/thermo.py Twb method)
+    - Twb_method (whether to use: `Stull` (2011), or the `thermo_isobaric` or `thermo_adiabatic` 
+      https://github.com/robwarrenwx/atmos/blob/main/atmos/thermo.py Twb method)
 
     Returns:
     - Twb (wet bulb temperature; -; float/1D/2D; degC)
