@@ -561,8 +561,8 @@ def facet2facet_view_fracs(H,W,geometry_choice):
     if geometry_choice == "canyon":
         Fsr = Frs = np.sqrt(1+(H/W)**2)-H/W
         Fww = np.sqrt(1+(W/H)**2)-W/H
-        Fwr = Fws = 0.5*(1-Fsr)
-        Frw = Fsw = 0.5*(1-Fww)
+        Fwr = Fws = 0.5*(1-Fww)
+        Frw = Fsw = 0.5*(1-Fsr)     
     elif geometry_choice == "flat":
         Fsr = Frs = 0.5
         Fww = Fwr = Fws = Frw = Fsw = 0.
