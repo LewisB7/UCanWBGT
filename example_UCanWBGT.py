@@ -37,7 +37,7 @@ P = 101325.0
 
 # calculate WBGT
 Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
-    fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fpw1r, Fpw1w2, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT \
+    fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT \
         = UCanWBGT.main(
         T=T, T_grnd=T_grnd, T_wall=T_wall, RH=RH, q=None, WS=WS, P=P, Ld=Ld, Kd=Kd, Id=Id,\
         gamma=gamma, LAI=LAI,\
@@ -100,7 +100,7 @@ P = 101325.0
 
 # calculate WBGT
 Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
-    fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fpw1r, Fpw1w2, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT \
+    fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT \
         = UCanWBGT.main(
         T=T, T_grnd=T_grnd, T_wall=T_wall, RH=RH, q=None, WS=WS, P=P, Ld=Ld, Kd=Kd, Id=Id,\
         gamma=gamma, LAI=LAI,\

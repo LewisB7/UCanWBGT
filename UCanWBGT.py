@@ -654,8 +654,10 @@ def partial2facet_view_fracs(H,W,fr,fw,geometry_choice):
     Returns:
     - Fprw1 (view from partially illuminated road of the partially illuminated wall; -)
     - Fprw2 (view from partially illuminated road of the opposite wall; -)
+    - Fprs (view from partially illuminated road of the sky; -)
     - Fpw1r (view from partially illuminated wall of the road; -)
     - Fpw1w2 (view from partially illuminated wall of the opposite wall; -)
+    - Fpw1s (view from partially illuminated wall of the sky; -)
     """
 
     if (type(fr) == float) or (fr.ndim == 0):
@@ -666,27 +668,30 @@ def partial2facet_view_fracs(H,W,fr,fw,geometry_choice):
         H = np.array(H,ndmin=1)
     if (type(W) == float) or (W.ndim == 0):
         W = np.array(W,ndmin=1)
-    Fprw1, Fprw2, Fpw1r, Fpw1w2 = np.zeros(np.shape(fr)), np.zeros(np.shape(fr)), \
-                                    np.zeros(np.shape(fr)), np.zeros(np.shape(fr))
+    Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s = np.zeros(np.shape(fr)), np.zeros(np.shape(fr)), \
+                                               np.zeros(np.shape(fr)), np.zeros(np.shape(fr)), \
+                                               np.zeros(np.shape(fr)), np.zeros(np.shape(fr))
     if geometry_choice == "canyon":
         # wall partially illuminated 
         m = fw!=0
         H_, W_, fr_, fw_ = np.copy(H[m]), np.copy(W[m]), \
             np.copy(fr[m]), np.copy(fw[m])
-        np.putmask(Fpw1r,m,0.5+(np.sqrt(W_**2+(1+fw_)**2*H_**2)-np.sqrt(H_**2+W_**2))/(2*fw_*H_)) # proportion from road
-        np.putmask(Fpw1w2,m,(np.sqrt(W_**2+fr_**2*H_**2)-np.sqrt(W_**2+(1-fw_)**2*H_**2)+np.sqrt(H_**2+W_**2)-W_)/(2*fw_*H_)) # proportion from opposite wall
+        np.putmask(Fpw1r,m,0.5+(np.sqrt(W_**2+(1-fw_)**2*H_**2)-np.sqrt(H_**2+W_**2))/(2*fw_*H_)) # proportion to road
+        np.putmask(Fpw1w2,m,(np.sqrt(W_**2+fw_**2*H_**2)-np.sqrt(W_**2+(1-fw_)**2*H_**2)+np.sqrt(H_**2+W_**2)-W_)/(2*fw_*H_)) # proportion to shaded wall
+        np.putmask(Fpw1s,m,0.5+(W_-np.sqrt(W_**2+fw_**2*H_**2))/(2*fw_*H_)) # proportion to sky
         # road partially illuminated
         m = fr!=0
         H_, W_, fr_, fw_ = np.copy(H[m]), np.copy(W[m]), \
             np.copy(fr[m]), np.copy(fw[m])
-        np.putmask(Fprw1,m,0.5+(H_-np.sqrt(H_**2+fr_**2*W_**2))/(2*fr_*W_)) # proportion from partially illuminated wall
-        np.putmask(Fprw2,m,0.5+(np.sqrt(H_**2+(1+fr_)**2*W_**2)-np.sqrt(H_**2+W_**2))/(2*fr_*W_)) # proportion from opposite wall
+        np.putmask(Fprw1,m,0.5+(H_-np.sqrt(H_**2+fr_**2*W_**2))/(2*fr_*W_)) # proportion to illuminated wall
+        np.putmask(Fprw2,m,0.5+(np.sqrt(H_**2+(1-fr_)**2*W_**2)-np.sqrt(H_**2+W_**2))/(2*fr_*W_)) # proportion to shaded wall
+        np.putmask(Fprs,m,(np.sqrt(H_**2+fr_**2*W_**2)-np.sqrt(H_**2+(1-fr_)**2*W_**2)+np.sqrt(H_**2+W_**2)-H_)/(2*fr_*W_)) # proportion to sky
     elif geometry_choice == "flat":
         pass
     else:
         sys.exit("!!! partial2facet_view_fracs -- geometry_choice can only be `canyon` or `flat` !!!")
 
-    return Fprw1, Fprw2, Fpw1r, Fpw1w2
+    return Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s
 
 def SrSw_func(Id,alb_grnd,alb_wall,zen,cazi):
     """
@@ -1116,7 +1121,7 @@ def main(
         Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw = facet2facet_view_fracs(H,W,geometry_choice)
         fr, fw = direct_illuminated_fractions(H,W,cazi,zen,geometry_choice)
         Fpr, Fpw = point2partial_view_fracs(H,W,Z,X,fr,fw,cazi,geometry_choice)
-        Fprw1, Fprw2, Fpw1r, Fpw1w2 = partial2facet_view_fracs(H,W,fr,fw,geometry_choice)
+        Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s = partial2facet_view_fracs(H,W,fr,fw,geometry_choice)
         Sr, Sw = SrSw_func(Id,alb_grnd,alb_wall,zen,cazi)
         K, Ks, Kr, Kw = K_func(Fs,Fr,Fw,Fsr,Frs,Fww,Fwr,Fws,Frw,Fsw,alb_grnd,alb_wall,Kd,Sr,Sw,Fpr,Fpw,Fprw1,Fprw2,Fpw1r,Fpw1w2,nref)
         gamma = gamma_func(gamma,LAI,gamma_choice)
@@ -1156,7 +1161,7 @@ def main(
     WBGT = WBGT_func(T,Twb,Tg,RH,L,K,I,a_g,a_LW,a_SW,WBGT_model_choice,WBGT_equation_choice)
 
     return Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
-            fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fpw1r, Fpw1w2, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT
+            fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT
 
 if __name__ == "__main__":
     # This block ensures that main() is called only when the script is executed directly
