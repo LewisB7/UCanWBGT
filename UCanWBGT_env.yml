@@ -9,5 +9,6 @@ dependencies:
   - scipy
   - cartopy
   - iris
+  - mo_pack
   - pvlib
   - pytz
