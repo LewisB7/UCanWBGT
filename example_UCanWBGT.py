@@ -4,42 +4,189 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 from datetime import datetime, timedelta
 import iris
+import mo_pack
 import pvlib
 import sys
 sys.path.append("/home/h04/lblunn/Documents/Projects/UCanWBGT")  # Add the directory containing UCanWBGT.py to the Python path
 import UCanWBGT
 import importlib
 importlib.reload(UCanWBGT)
-from parameters import (time, tzinfo, WBGT_model_choice, geometry_choice, nref, gamma_choice, WBGT_equation_choice,
-                        Twb_method, gamma, LAI, lat, lon, elevation, canyon_orient_deg, Z, H, W, X,
+from constants import sboltz
+from parameters import (tzinfo, WBGT_model_choice, geometry_choice, nref, gamma_choice, WBGT_equation_choice,
+                        Twb_method, gamma, LAI, elevation, canyon_orient_deg, Z, X,
                         tile_number, alb_grnd_tiles, alb_wall, emiss_grnd_tiles, emiss_wall,
                         emiss_g, a_g, d, a_SW, a_LW)
 
-### Set Remaining Parameters ###
+### load data ###
 
+# UPD
+UPD = iris.load('/scratch/lblunn/heat_stress_wkeat/bb189a.pd20600613.pp')
+print("UPD:\n",UPD)
+T = UPD.extract(iris.AttributeConstraint(STASH='m01s03i236'))[0]
+print("T:\n",T)
+q = UPD.extract(iris.AttributeConstraint(STASH='m01s03i237'))[0]
+print("q:\n",q)
+Ld = UPD.extract(iris.AttributeConstraint(STASH='m01s02i207'))[0]
+print("Ld:\n",Ld)
+KId = UPD.extract(iris.AttributeConstraint(STASH='m01s01i235'))[0]
+print("KId:\n",KId)
+P = UPD.extract(iris.AttributeConstraint(STASH='m01s00i409'))[0]
+print("P:\n",P)
+
+# UPF
+UPF = iris.load('/scratch/lblunn/heat_stress_wkeat/bb189a.pf20600613.pp')
+print("UPF:\n",UPF)
+WS_X = UPF.extract(iris.AttributeConstraint(STASH='m01s00i002'))[0]
+print("WS_X:\n",WS_X)
+print("WS_X height:\n",WS_X.coord('level_height'))
+WS_Y = UPF.extract(iris.AttributeConstraint(STASH='m01s00i003'))[0]
+print("WS_Y:\n",WS_Y)
+
+# UPU
+UPU = iris.load('/scratch/lblunn/heat_stress_wkeat/bb189a.pu20600613.pp')
+Lu = UPU.extract(iris.AttributeConstraint(STASH='m01s02i217'))[0]
+print("Lu:\n",Lu)
+print("Lu height:\n",Lu.coord('level_height'))
+
+# UPE
+UPE = iris.load('/scratch/lblunn/heat_stress_wkeat/bb189a.pe20600613.pp')
+print("UPE:\n",UPE)
+
+### Will specific data processing ###
+
+# constrain on time
+time = '20600613T1500Z' # the time we are calculating WBGT at 
 t = datetime.strptime(time,'%Y%m%dT%H%MZ')
-dateandtime = datetime(year=t.year, month=t.month, day=t.day, hour=t.hour, minute=t.minute, second=t.second)
+dateandtime = datetime(year=t.year, month=t.month, day=t.day, hour=t.hour, minute=t.minute)
+target_time = iris.time.PartialDateTime(year=t.year, month=t.month, day=t.day, hour=t.hour, minute=t.minute)
+target_time_m1p5 = iris.time.PartialDateTime(year=t.year, month=t.month, day=t.day, hour=t.hour-2, minute=t.minute+30)
+target_time_p1p5 = iris.time.PartialDateTime(year=t.year, month=t.month, day=t.day, hour=t.hour+1, minute=t.minute+30)
+
+constraint = iris.Constraint(time=lambda cell: cell.point == target_time)
+T = T.extract(constraint) # these variables are hourly instantaneous
+q = q.extract(constraint) # these variables are hourly instantaneous
+
+def interpolate_to_hour(cube,target_time_m1p5,target_time_p1p5):
+
+    m_constraint = iris.Constraint(time=lambda cell: cell.point == target_time_m1p5)
+    p_constraint = iris.Constraint(time=lambda cell: cell.point == target_time_p1p5)
+    m_time_pnt = cube.extract(m_constraint).coord('time').points
+    p_time_pnt = cube.extract(p_constraint).coord('time').points
+    cube = cube.interpolate([('time', (m_time_pnt + p_time_pnt)/2)], iris.analysis.Linear())[0,:,:]
+
+    return cube
+
+# these variables are 3 hour average (so approximate on the hour)
+Ld = interpolate_to_hour(Ld,target_time_m1p5,target_time_p1p5)
+KId = interpolate_to_hour(KId,target_time_m1p5,target_time_p1p5)
+WS_X = interpolate_to_hour(WS_X,target_time_m1p5,target_time_p1p5)
+WS_Y = interpolate_to_hour(WS_Y,target_time_m1p5,target_time_p1p5)
+P = interpolate_to_hour(P,target_time_m1p5,target_time_p1p5)
+Lu = interpolate_to_hour(Lu,target_time_m1p5,target_time_p1p5)
+
+# calculate solar angles at one lat/lon in the centre of the UK (Birmingham of course) 
+# since zenith angle is required to approximate diffuse/direct partitioning
+# (note solar angle calculations are done on the lat/lon grid within UCanWBGT.main)
+zen, cazi, solar_zen_deg, solar_azi_deg, canyon_azi_deg = \
+    UCanWBGT.zen_and_cazi(52.5,-1.9,elevation,dateandtime,canyon_orient_deg,tzinfo)
+
+# approximate diffuse and direct partitioning (choose clear sky)
+# https://link.springer.com/book/10.1007/978-1-4612-1626-1, Sect. 11.2, Eq. 11.13
+# note: if cloud cover is available then where cloud=True the shortwave could be set to 100% diffuse 
+Kd = KId.copy()
+Id = KId.copy()
+tau = 0.65
+m = 1/np.cos(zen)
+Kd.data = 0.3*(1-tau**m)*np.cos(zen)*KId.data
+Id.data = KId.data - Kd.data
+
+# WS_X and WS_Y have different grids, interpolate onto T grid
+WS_X_2p5m = WS_X[0,:,:].regrid(T, iris.analysis.Linear())
+WS_Y_2p5m = WS_Y[0,:,:].regrid(T, iris.analysis.Linear())
+# approximate 1.5 m wind speed by linear interpolation
+WS_2p5m = WS_X_2p5m.copy()
+WS_2p5m.data = (WS_X_2p5m.data**2 + WS_Y_2p5m.data**2)**0.5
+WS = WS_2p5m.copy()
+WS.data = WS_2p5m.data * (1.5 - 0.) / (2.5 - 0.)
+
+# dummy surface description ancillaries
+# *** at locations where urban fraction is zero the geometry_choice should be flat
+# or functionality to handle Z > H should be added -- this needs doing in UCanWBGT.py ***
+lc_fracs = [0.05,0.,0.3,0.,0.,0.,0.,0.,0.4,0.25]
+H = 10. # *** in the current code when geometry_choice = canyon then Z < H and H > 0 must be satisfied ***
+W = 20.
 alb_grnd = alb_grnd_tiles[tile_number]
 emiss_grnd = emiss_grnd_tiles[tile_number]
 
-### UCanWBGT 0D example ###
+# Surface temperature of grid box (calculate using grid box average longwave up)
+# Use to approximate the surface temperature in the viewing fraction of the black globe
+emiss_canyon = 0.95 # approx. bulk emissivity of canyon tile based on Fig. 4 Porson et al. (2010), due to geometry it is not the same as the canyon ground emissivity 
+emiss_tiles = np.copy(emiss_grnd_tiles)
+emiss_tiles[-2] = emiss_canyon
+emiss_gb = np.sum(emiss_tiles*lc_fracs)/np.sum(lc_fracs) # land cover fraction weighted average emissivity
+print("emiss_gb:",emiss_gb)
+T_grnd = Lu[0,:,:].copy() # Lu at bottom model level
+T_grnd.data = (Lu[0,:,:].data/(emiss_gb*sboltz))**0.25
+T_wall = T_grnd.copy()
 
-# Set forcing variables
-T = 35.
-T_grnd = 35.
-T_wall = 35.
-RH = 75.
-WS = 2.
-Ld = 450.
-Kd = 200.
-Id = 600.
-P = 101325.0
+### Convert to arrays and do any unit conversions ###
 
-# calculate WBGT
+grid_longitude = T.coord('grid_longitude').points
+grid_latitude = T.coord('grid_latitude').points
+grid_lon_mesh, grid_lat_mesh = np.meshgrid(grid_longitude, grid_latitude)
+pole_lon = T.coord('grid_longitude').coord_system.grid_north_pole_longitude
+pole_lat = T.coord('grid_latitude').coord_system.grid_north_pole_latitude
+lon, lat = iris.analysis.cartography.unrotate_pole(grid_lon_mesh, grid_lat_mesh, pole_lon, pole_lat)
+
+T = T.data - 273.15 # degC
+q = q.data
+Ld = Ld.data
+Id = Id.data
+Kd = Kd.data
+P = P.data
+WS = WS.data
+T_grnd = T_grnd.data - 273.15 # degC
+T_wall = T_wall.data - 273.15 # degC
+
+### calculate WBGT ###
+
+variables = {
+    "T": T,
+    "T_grnd": T_grnd,
+    "T_wall": T_wall,
+    "q": q,
+    "WS": WS,
+    "P": P,
+    "Ld": Ld,
+    "Kd": Kd,
+    "Id": Id,
+    "gamma": gamma,
+    "LAI": LAI,
+    "H": H,
+    "W": W,
+    "Z": Z,
+    "X": X,
+    "canyon_orient_deg": canyon_orient_deg,
+    "a_SW": a_SW,
+    "a_LW": a_LW,
+    "alb_grnd": alb_grnd,
+    "alb_wall": alb_wall,
+    "emiss_grnd": emiss_grnd,
+    "emiss_wall": emiss_wall,
+    "emiss_g": emiss_g,
+    "a_g": a_g,
+    "d": d,
+    "lat": lat,
+    "lon": lon,
+    "elevation": elevation
+}
+for name, var in variables.items():
+    print(f"{name}: {np.shape(var)}")
+
 Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
     fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT \
         = UCanWBGT.main(
-        T=T, T_grnd=T_grnd, T_wall=T_wall, RH=RH, q=None, WS=WS, P=P, Ld=Ld, Kd=Kd, Id=Id,\
+        T=T, T_grnd=T_grnd, T_wall=T_wall, RH=None, q=q, WS=WS, P=P, Ld=Ld, Kd=Kd, Id=Id,\
         gamma=gamma, LAI=LAI,\
         H=H, W=W, Z=Z, X=X, canyon_orient_deg=canyon_orient_deg,\
         a_SW=a_SW, a_LW=a_LW,\
@@ -49,71 +196,8 @@ Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fw
         WBGT_model_choice=WBGT_model_choice, geometry_choice=geometry_choice, nref=nref,\
         gamma_choice=gamma_choice, WBGT_equation_choice=WBGT_equation_choice, Twb_method=Twb_method 
         )
-print(", ".join([f"Twb: {Twb}", f"solar_zen_deg: {solar_zen_deg}", f"solar_azi_deg: {solar_azi_deg}", f"canyon_azi_deg: {canyon_azi_deg}", f"Fs: {Fs}", f"Fr: {Fr}", f"Fw: {Fw}", f"Fsr: {Fsr}", f"Frs: {Frs}", f"Fww: {Fww}", f"Fwr: {Fwr}", f"Fws: {Fws}", f"Frw: {Frw}", f"Fsw: {Fsw}", f"fr: {fr}", f"fw: {fw}", f"Fpr: {Fpr}", f"Fpw: {Fpw}", f"Fprw1: {Fprw1}", f"Fprw2: {Fprw2}", f"Fpw1r: {Fpw1r}", f"Fpw1w2: {Fpw1w2}", f"Sr: {Sr}", f"Sw: {Sw}", f"K: {K}", f"Ks: {Ks}", f"Kr: {Kr}", f"Kw: {Kw}", f"I: {I}", f"L: {L}", f"MRT: {MRT}", f"Tg: {Tg}", f"WBGT: {WBGT}"]))
 
-### UCanWBGT 2D example ###
-
-# Overwrite lat, lon, elevation
-num_points = 20
-dlat = 180./(num_points+1)
-min_lat = -90 + dlat/2.
-max_lat = 90 - dlat/2.
-latitude = np.linspace(min_lat, max_lat, num_points)
-dlon = 360./(num_points+1)
-min_lon = -180 + dlon/2.
-max_lon = 180 - dlon/2.
-longitude = np.linspace(min_lon, max_lon, num_points)
-lon, lat = np.meshgrid(longitude, latitude)
-elevation = UCanWBGT.adjust_array_shape(elevation, lon)
-
-# Calculate zenith angle to make radiation forcing variables semi-plausible
-zen, cazi, solar_zen_deg, solar_azi_deg, canyon_azi_deg = \
-    UCanWBGT.zen_and_cazi(lat,lon,elevation,dateandtime,canyon_orient_deg,tzinfo)
-
-# Set forcing variables
-rows = np.arange(num_points)
-cols = np.arange(num_points)
-row_values = np.linspace(25, 45, num_points)
-col_values = np.linspace(25, 45, num_points)
-T = np.zeros((num_points, num_points))
-for i, row in enumerate(rows):
-    for j, col in enumerate(cols):
-        T[i, j] = (row_values[i] + col_values[j]) / 2
-T_grnd = np.copy(T)
-T_wall = np.copy(T)
-
-RH = np.zeros((num_points, num_points))
-RH[:, :] = 20.
-RH[:, ::2] = 90.
-
-WS = np.zeros((num_points, num_points))
-WS[:, :] = 0.5
-WS[::2, :] = 5.
-
-Ld = 450.
-zen[zen>np.pi/2] = np.pi/2
-cos_zen = np.cos(zen)
-Kd = 200.*cos_zen
-Id = 800.*cos_zen
-
-P = 101325.0
-
-# calculate WBGT
-Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
-    fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT \
-        = UCanWBGT.main(
-        T=T, T_grnd=T_grnd, T_wall=T_wall, RH=RH, q=None, WS=WS, P=P, Ld=Ld, Kd=Kd, Id=Id,\
-        gamma=gamma, LAI=LAI,\
-        H=H, W=W, Z=Z, X=X, canyon_orient_deg=canyon_orient_deg,\
-        a_SW=a_SW, a_LW=a_LW,\
-        alb_grnd=alb_grnd, alb_wall=alb_wall, emiss_grnd=emiss_grnd, emiss_wall=emiss_wall,\
-        emiss_g=emiss_g, a_g=a_g, d=d,\
-        lat=lat, lon=lon, elevation=elevation, dateandtime=dateandtime, tzinfo=tzinfo,\
-        WBGT_model_choice=WBGT_model_choice, geometry_choice=geometry_choice, nref=nref,\
-        gamma_choice=gamma_choice, WBGT_equation_choice=WBGT_equation_choice, Twb_method=Twb_method
-        )
-
-# plot: T, RH, WS, Twb, MRT, Tg, solar_zen_deg, canyon_azi_deg, WBGT
+# plot: T, SH, WS, Twb, MRT, Tg, solar_zen_deg, canyon_azi_deg, WBGT
 
 fig = plt.figure(figsize=(8.0,3.2))
 matplotlib.rcParams.update({'font.size': 8})
@@ -138,7 +222,8 @@ ax7 = fig.add_axes([left2, bottom1, width, height], projection=ccrs.PlateCarree(
 ax8 = fig.add_axes([left3, bottom1, width, height], projection=ccrs.PlateCarree()) #[left, bottom, width, height]
 
 # axes lat/lon extent
-extent = [np.min(lon)-dlon/2, np.max(lon)+dlon/2, np.min(lat)-dlat/2, np.max(lat)+dlat/2]
+#extent = [np.min(lon), np.max(lon), np.min(lat), np.max(lat)] # UKCP extent
+extent = [-1.5, 1.5, 50.5, 52.] # SE extent
 ax0.set_extent(extent, crs=ccrs.PlateCarree())
 ax1.set_extent(extent, crs=ccrs.PlateCarree())
 ax2.set_extent(extent, crs=ccrs.PlateCarree())
@@ -154,9 +239,9 @@ vmin = np.min(T)
 vmax = np.max(T)
 c0 = ax0.pcolormesh(lon, lat, T,
                    cmap='hot_r', vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
-vmin = np.min(RH)
-vmax = np.max(RH)
-c1 = ax1.pcolormesh(lon, lat, RH,
+vmin = np.min(q)
+vmax = np.max(q)
+c1 = ax1.pcolormesh(lon, lat, q,
                    cmap='gray_r', vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
 vmin = np.min(WS)
 vmax = np.max(WS)
@@ -245,7 +330,7 @@ cbar0.set_label(r"$T$ ($^\circ$C)", rotation=90, loc="center")
 #1
 cax1 = fig.add_axes([left2+width+cdelta, bottom3, cwidth+cdelta, height])
 cbar1 = fig.colorbar(c1, cax=cax1, orientation="vertical")
-cbar1.set_label(r"$RH$ ($\%$)", rotation=90, loc="center")
+cbar1.set_label(r"$q$ (kg kg$^{-1}$)", rotation=90, loc="center")
 #2
 cax2 = fig.add_axes([left3+width+cdelta, bottom3, cwidth+cdelta, height])
 cbar2 = fig.colorbar(c2, cax=cax2, orientation="vertical")
@@ -279,4 +364,3 @@ cbar8.set_label(r"$WBGT$ ($^\circ$C)", rotation=90, loc="center")
 
 plt.savefig(f"./figs/example_{time}.png", dpi=300, bbox_inches='tight')
 plt.show()
-
