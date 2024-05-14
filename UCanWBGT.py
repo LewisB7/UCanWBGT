@@ -10,26 +10,72 @@ from constants import (Rd, Rv, eps, cpd, cpv, cpl, cpi, p_ref,
 UCanWBGT heat index calculation functions.
 """
 
-def adjust_array_shape(array_or_float, reference):
+def adjust_array_shape(array_or_float_list, reference):
     """
-    Adjust the shape of the input array or float to match the shape of the reference array.
-    If the input is a float, it will be repeated to create an array with the same shape as the reference.
+    Adjust the shape of the elements of array_or_float_list to match the shape of the reference.
 
     Arguments:
-    - array_or_float (The array or float; numpy.ndarray or float)  
-    - reference (The reference array or float; numpy.ndarray or float)
+    - array_or_float_list (a list; list)  
+    - reference (a reference array; numpy.ndarray or float)
 
     Returns:
-    - array_or_float (The adjusted array or float; numpy.ndarray or float)     
+    - out_list (a list of arrays; list)     
     """
 
-    if isinstance(array_or_float, np.ndarray) and isinstance(reference, np.ndarray):
-        if array_or_float.shape != reference.shape:
-            return array_or_float
-    elif isinstance(array_or_float, float) and hasattr(reference, 'shape'):
-        return np.full_like(reference, array_or_float)
-    
-    return array_or_float
+    out_list = []
+    for i in range(len(array_or_float_list)):
+        array_or_float = array_or_float_list[i]
+        if array_or_float is None:
+            pass
+        else:
+            if isinstance(array_or_float, float):
+                array_or_float = np.array([array_or_float])
+            if (array_or_float.shape != reference.shape):
+                array_or_float = np.full_like(reference, array_or_float)
+        out_list.append(array_or_float)
+
+    return out_list
+
+def mask_and_1d(arr,mask):
+    """
+    Apply a mask to arr and flatten if arr is not None.
+
+    Arguments:
+    - arr (an array; numpy.ndarray or None)  
+    - mask (a mask; numpy.ndarray of Booleans)
+
+    Returns:
+    - arr (an array; numpy.ndarray or None)     
+    """
+
+    if arr is None:
+        arr = None
+    else:
+        arr_without_zeros = arr[~mask]
+        arr = arr_without_zeros.flatten()
+
+    return arr
+
+def put_array_shape_back(array_or_float_list, mask):
+    """
+    Convert arrays back to their original shape using the mask.
+
+    Arguments:
+    - array_or_float_list (a list of arrays; list)  
+    - reference (a mask; numpy.ndarray of Booleans)
+
+    Returns:
+    - out_list (a list of arrays; list)     
+    """
+
+    out_list = []
+    for i in range(len(array_or_float_list)):
+        before = array_or_float_list[i]
+        after = np.zeros(np.shape(mask))
+        after[~mask] = before
+        out_list.append(after)
+
+    return out_list
 
 def q_from_RH(T,RH,P):
     """
@@ -510,7 +556,7 @@ def prevent_X_in_wall(X,W):
     
     return X
 
-def point2facet_view_fracs(H,W,Z,X,geometry_choice):
+def point2facet_view_fracs(H,W,Z,X,geometry):
     """
     Viewing fractions of each of the facets as viewed from the globe.
 
@@ -519,7 +565,7 @@ def point2facet_view_fracs(H,W,Z,X,geometry_choice):
     - W (canyon width; m)
     - Z (black globe height; m)
     - X (black globe horizontal distance right of the centre line; m)
-    - geometry_choice (whether to use: `flat` or `canyon` geometry)
+    - geometry (whether to use: `flat` or `canyon` geometry)
 
     Returns:
     - Fs (sky viewing fraction from the black globe; -)
@@ -527,7 +573,7 @@ def point2facet_view_fracs(H,W,Z,X,geometry_choice):
     - Fw (two wall viewing fraction from the black globe; -)
     """
 
-    if geometry_choice == "canyon":
+    if geometry == "canyon":
         ap = (W+2*X)/(2*(H-Z))
         am = (W-2*X)/(2*(H-Z))
         bp = (W+2*X)/(2*Z)
@@ -535,23 +581,23 @@ def point2facet_view_fracs(H,W,Z,X,geometry_choice):
         Fs = 1/(2*np.pi)*(np.arctan(ap)+np.arctan(am))
         Fr = 1/(2*np.pi)*(np.arctan(bm)+np.arctan(bp))
         Fw = 1/(2*np.pi)*(np.arctan(1/am)+np.arctan(1/bm)+np.arctan(1/bp)+np.arctan(1/ap))
-    elif geometry_choice == "flat":
+    elif geometry == "flat":
         Fs = 0.5
         Fr = 0.5
         Fw = 0.
     else:
-        sys.exit("!!! point2facet_view_fracs -- geometry_choice can only be `canyon` or `flat` !!!")
+        sys.exit("!!! point2facet_view_fracs -- geometry can only be `canyon` or `flat` !!!")
 
     return Fs, Fr, Fw
 
-def facet2facet_view_fracs(H,W,geometry_choice):
+def facet2facet_view_fracs(H,W,geometry):
     """
     Viewing fractions of each of the facets as viewed from each facet.
 
     Arguments:
     - H (canyon height; m)
     - W (canyon width; m)
-    - geometry_choice (whether to use: `flat` or `canyon` geometry)
+    - geometry (whether to use: `flat` or `canyon` geometry)
 
     Returns:
     - Fsr (fraction of sky viewed from the road; -)
@@ -563,20 +609,20 @@ def facet2facet_view_fracs(H,W,geometry_choice):
     - Fsw (fraction of sky viewed from the wall; -)
     """
 
-    if geometry_choice == "canyon":
+    if geometry == "canyon":
         Fsr = Frs = np.sqrt(1+(H/W)**2)-H/W
         Fww = np.sqrt(1+(W/H)**2)-W/H
         Fwr = Fws = 0.5*(1-Fww)
         Frw = Fsw = 0.5*(1-Fsr)
-    elif geometry_choice == "flat":
+    elif geometry == "flat":
         Fsr = Frs = 0.5
         Fww = Fwr = Fws = Frw = Fsw = 0.
     else:
-        sys.exit("!!! facet2facet_view_fracs -- geometry_choice can only be `canyon` or `flat` !!!")
+        sys.exit("!!! facet2facet_view_fracs -- geometry can only be `canyon` or `flat` !!!")
 
     return Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw
 
-def direct_illuminated_fractions(H,W,cazi,zen,geometry_choice):
+def direct_illuminated_fractions(H,W,cazi,zen,geometry):
     """
     Fraction of wall and road illuminated by the direct beam.
     Depending on azi the direct beam might illuminate none of the wall,
@@ -587,14 +633,14 @@ def direct_illuminated_fractions(H,W,cazi,zen,geometry_choice):
     - W (canyon width; m)
     - cazi (canyon azimuth angle; rad)
     - zen (solar zenith angle; rad)
-    - geometry_choice (whether to use: `flat` or `canyon` geometry)
+    - geometry (whether to use: `flat` or `canyon` geometry)
 
     Returns:
     - fr (fraction of the road illuminated by the direct beam; -)
     - fw (fraction of the wall illuminated by the direct beam; -)
     """
 
-    if geometry_choice == "canyon":
+    if geometry == "canyon":
         fr = 1 - (H*np.tan(zen)*np.absolute(np.cos(cazi)))/W
         fw = W/(H*np.tan(zen)*np.absolute(np.cos(cazi)))
         fr[fr < 0] = 0.
@@ -602,15 +648,15 @@ def direct_illuminated_fractions(H,W,cazi,zen,geometry_choice):
         fw[fw < 0] = 0.
         fw[fw > 1] = 1.
         fr[zen > 90*np.pi/180.] = 0.
-    elif geometry_choice == "flat":
+    elif geometry == "flat":
         fr = np.ones(np.shape(H))
         fw = np.zeros(np.shape(H))
     else:
-        sys.exit("!!! partial2facet_view_fracs -- geometry_choice can only be `canyon` or `flat` !!!")
+        sys.exit("!!! partial2facet_view_fracs -- geometry can only be `canyon` or `flat` !!!")
 
     return fr, fw
 
-def point2partial_view_fracs(H,W,Z,X,fr,fw,cazi,geometry_choice):
+def point2partial_view_fracs(H,W,Z,X,fr,fw,cazi,geometry):
     """
     Partial illumination viewing fractions of each of the facets as viewed from the black globe.
 
@@ -621,27 +667,27 @@ def point2partial_view_fracs(H,W,Z,X,fr,fw,cazi,geometry_choice):
     - X (black globe horizontal distance right of the centre line; m)
     - fr, fw (fraction of the road/wall illuminated by the direct beam; -)
     - cazi (canyon azimuth angle; rad)
-    - geometry_choice (whether to use: `flat` or `canyon` geometry)
+    - geometry (whether to use: `flat` or `canyon` geometry)
 
     Returns:
     - Fpr (partial viewing fraction of the road; -)
     - Fpw (partial viewing fraction of the wall; -)
     """
 
-    if geometry_choice == "canyon":
+    if geometry == "canyon":
         indices = np.absolute(cazi) > np.pi/2
         X[indices] = -X[indices]
         Fpr = 1/(2*np.pi)*(np.arctan((W+2*X)/(2*Z))-np.arctan(((1-2*fr)*W+2*X)/(2*Z)))
         Fpw = 1/(2*np.pi)*(np.arctan((2*(H-Z))/(W+2*X))-np.arctan(2*(((1-fw)*H)-Z)/(W+2*X)))
-    elif geometry_choice == "flat":
+    elif geometry == "flat":
         Fpr = 0.5
         Fpw = 0.
     else:
-        sys.exit("!!! partial2facet_view_fracs -- geometry_choice can only be `canyon` or `flat` !!!")
+        sys.exit("!!! partial2facet_view_fracs -- geometry can only be `canyon` or `flat` !!!")
 
     return Fpr, Fpw
 
-def partial2facet_view_fracs(H,W,fr,fw,geometry_choice):
+def partial2facet_view_fracs(H,W,fr,fw,geometry):
     """
     Viewing fractions of each of the facets as viewed from the partially illuminated facet.
 
@@ -649,7 +695,7 @@ def partial2facet_view_fracs(H,W,fr,fw,geometry_choice):
     - H (canyon height; m)
     - W (canyon width; m)
     - fr, fw (fraction of the road/wall illuminated by the direct beam; -)
-    - geometry_choice (whether to use: `flat` or `canyon` geometry)
+    - geometry (whether to use: `flat` or `canyon` geometry)
 
     Returns:
     - Fprw1 (view from partially illuminated road of the partially illuminated wall; -)
@@ -671,7 +717,7 @@ def partial2facet_view_fracs(H,W,fr,fw,geometry_choice):
     Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s = np.zeros(np.shape(fr)), np.zeros(np.shape(fr)), \
                                                np.zeros(np.shape(fr)), np.zeros(np.shape(fr)), \
                                                np.zeros(np.shape(fr)), np.zeros(np.shape(fr))
-    if geometry_choice == "canyon":
+    if geometry == "canyon":
         # wall partially illuminated 
         m = fw!=0
         H_, W_, fr_, fw_ = np.copy(H[m]), np.copy(W[m]), \
@@ -686,10 +732,10 @@ def partial2facet_view_fracs(H,W,fr,fw,geometry_choice):
         np.putmask(Fprw1,m,0.5+(H_-np.sqrt(H_**2+fr_**2*W_**2))/(2*fr_*W_)) # proportion to illuminated wall
         np.putmask(Fprw2,m,0.5+(np.sqrt(H_**2+(1-fr_)**2*W_**2)-np.sqrt(H_**2+W_**2))/(2*fr_*W_)) # proportion to shaded wall
         np.putmask(Fprs,m,(np.sqrt(H_**2+fr_**2*W_**2)-np.sqrt(H_**2+(1-fr_)**2*W_**2)+np.sqrt(H_**2+W_**2)-H_)/(2*fr_*W_)) # proportion to sky
-    elif geometry_choice == "flat":
+    elif geometry == "flat":
         pass
     else:
-        sys.exit("!!! partial2facet_view_fracs -- geometry_choice can only be `canyon` or `flat` !!!")
+        sys.exit("!!! partial2facet_view_fracs -- geometry can only be `canyon` or `flat` !!!")
 
     return Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s
 
@@ -829,7 +875,7 @@ def gamma_func(gamma,LAI,gamma_choice):
 
     return gamma
 
-def I_func(Id,H,W,Z,X,zen,cazi,gamma,geometry_choice):
+def I_func(Id,H,W,Z,X,zen,cazi,gamma,geometry):
     """
     Shortwave direct beam radiation at black globe calculation.
 
@@ -848,11 +894,11 @@ def I_func(Id,H,W,Z,X,zen,cazi,gamma,geometry_choice):
     - I (shortwave direct radiation received by the black globe; W m-2)
     """
 
-    if geometry_choice == "flat":
+    if geometry == "flat":
         cos_zen = np.cos(zen)
         cos_zen[cos_zen<0.1] = 0.1
         I = gamma*Id/(4*cos_zen) # max stops blow up at small zenith angles
-    elif geometry_choice == "canyon":
+    elif geometry == "canyon":
         indices = np.absolute(cazi) > np.pi
         X[indices] = -X[indices]
         beta = np.arctan((W-2*X)/(2*(H-Z)*np.absolute(np.cos(cazi-np.pi/2))))
@@ -863,7 +909,7 @@ def I_func(Id,H,W,Z,X,zen,cazi,gamma,geometry_choice):
             I = np.array([I])
         I[zen>=beta] = 0. # if Sun below buildings then I=0
     else:
-        sys.exit("!!! I_func -- geometry_choice can only be `flat` or `canyon` !!!")
+        sys.exit("!!! I_func -- geometry can only be `flat` or `canyon` !!!")
 
     return I
 
@@ -1014,52 +1060,53 @@ def WBGT_func(T,Twb,Tg,RH,L,K,I,a_g,a_LW,a_SW,WBGT_model_choice,WBGT_equation_ch
 def main(
     T=None, T_grnd=None, T_wall=None, RH=None, q=None, WS=None, P=None, Ld=None, Kd=None, Id=None,\
     gamma=None, LAI=None,\
-    H=None, W=None, Z=None, X=None, canyon_orient_deg=None,\
+    H=None, W=None, Z=None, X=None, tile_number=None, tf=None, canyon_orient_deg=None,\
     a_SW=None, a_LW=None,\
     alb_grnd=None, alb_wall=None, emiss_grnd=None, emiss_wall=None,\
     emiss_g=None, a_g=None, d=None,\
     lat=None, lon=None, elevation=None, dateandtime=None, tzinfo=None,\
-    WBGT_model_choice=None, geometry_choice=None, nref=None,\
-    gamma_choice=None, WBGT_equation_choice=None, Twb_method=None 
+    WBGT_model_choice=None, geometry=None, nref=None,\
+    gamma_choice=None, WBGT_equation_choice=None, Twb_method=None
     ):
     """
     main of UCanWBGT module.
 
     Arguments:
-    - T (air temperature; -; float/1D/2D; degC)
-    - T_grnd (surface temperature of the gound; equivalent to Tr in Shonk et al. (XXX) when the ground is road; float/1D/2D; degC)
-    - T_wall (surface temperature of the walls; equivalent to Tw in Shonk et al. (XXX); float/1D/2D; degC)
-    - RH (relative humidity; -; float/1D/2D; %)
-    - q (specific humidity; -; float/1D/2D; kg kg-1)
-    - WS (wind speed; -; float/1D/2D; m s-1)
-    - P (surface pressure; -; float/1D/2D; Pa)
-    - Ld (downwelling longwave radiation; equivalent to L_\{downarrow} in Shonk et al. (XXX); float/1D/2D; W m-2)
-    - Kd (downwelling shortwave diffuse radiation; equivalent to K_\{downarrow} in Shonk et al. (XXX); float/1D/2D; W m-2)
-    - Id (downwelling shortwave direct radiation; equivalent to I_\{downarrow} in Shonk et al. (XXX); float/1D/2D; W m-2)
-    - gamma (direct beam attenuation factor; -; float/1D/2D; -)
-    - LAI (direct beam attenuation factor; -; float/1D/2D; -)
-    - H (canyon height; -; float/1D/2D; m)
-    - W (canyon width; -; float/1D/2D; m)
-    - Z (black globe height; -; float/1D/2D; m)
-    - X (black globe horizontal distance right of the centre line; -; float/1D/2D; m)
+    - T (air temperature; -; float/0D/1D/2D; degC)
+    - T_grnd (surface temperature of the gound; equivalent to Tr in Shonk et al. (XXX) when the ground is road; float/0D/1D/2D; degC)
+    - T_wall (surface temperature of the walls; equivalent to Tw in Shonk et al. (XXX); float/0D/1D/2D; degC)
+    - RH (relative humidity; -; float/0D/1D/2D; %)
+    - q (specific humidity; -; float/0D/1D/2D; kg kg-1)
+    - WS (wind speed; -; float/0D/1D/2D; m s-1)
+    - P (surface pressure; -; float/0D/1D/2D; Pa)
+    - Ld (downwelling longwave radiation; equivalent to L_\{downarrow} in Shonk et al. (XXX); float/0D/1D/2D; W m-2)
+    - Kd (downwelling shortwave diffuse radiation; equivalent to K_\{downarrow} in Shonk et al. (XXX); float/0D/1D/2D; W m-2)
+    - Id (downwelling shortwave direct radiation; equivalent to I_\{downarrow} in Shonk et al. (XXX); float/0D/1D/2D; W m-2)
+    - gamma (direct beam attenuation factor; -; float/0D/1D/2D; -)
+    - LAI (direct beam attenuation factor; -; float/0D/1D/2D; -)
+    - H (canyon height; -; float/0D/1D/2D; m)
+    - W (canyon width; -; float/0D/1D/2D; m)
+    - Z (black globe height; -; float/0D/1D/2D; m)
+    - X (black globe horizontal distance right of the centre line; -; float/0D/1D/2D; m)
+    - tile_number (tile number; -; int; 0-9)
+    - tf (tile fraction; -; float/0D/1D/2D; -)
     - canyon_orient_deg (canyon orientation angle defined as the horizontal angle measured clockwise from north to a
-      line running parallel to the alignment of the street canyon; -; float/1D/2D; deg)
+      line running parallel to the alignment of the street canyon; -; float/0D/1D/2D; deg)
     - a_SW (shortwave absorptivity of a human; -; float; -)
     - a_LW (longwave absorptivity of a human; -; float; -)
-    - alb_grnd (albedo of the ground; equivalent to \alpha_r in Shonk et al. (XXX) when the ground is road; float/1D/2D; -)
-    - alb_wall (albedo of the walls; equivalent to \alpha_w in Shonk et al. (XXX); float/1D/2D; -)
-    - emiss_grnd (emissivity of the ground; equivalent to \epsilon_r in Shonk et al. (XXX) when the ground is road; float/1D/2D; -)
-    - emiss_wall (emissivity of the walls; equivalent to \epsilon_w in Shonk et al. (XXX); float/1D/2D; -)
+    - alb_grnd (albedo of the ground; equivalent to \alpha_r in Shonk et al. (XXX) when the ground is road; float/0D/1D/2D; -)
+    - alb_wall (albedo of the walls; equivalent to \alpha_w in Shonk et al. (XXX); float/0D/1D/2D; -)
+    - emiss_grnd (emissivity of the ground; equivalent to \epsilon_r in Shonk et al. (XXX) when the ground is road; float/0D/1D/2D; -)
+    - emiss_wall (emissivity of the walls; equivalent to \epsilon_w in Shonk et al. (XXX); float/0D/1D/2D; -)
     - emiss_g (emissivity of the black globe; equivalent to \epsilon_g in Shonk et al. (XXX); float; -)
     - a_g (absorptivity of the black globe; -; float; -)
     - d (diameter of the black globe; -; float; m)
-    - lat (latitudes; -; float/1D/2D; deg in WGS84)
-    - lon (longitudes; -; float/1D/2D; deg in WGS84)
-    - elevation (elevations; -; float/1D/2D; m in WGS84)
+    - lat (latitudes; -; float/0D/1D/2D; deg in WGS84)
+    - lon (longitudes; -; float/0D/1D/2D; deg in WGS84)
+    - elevation (elevations; -; float/0D/1D/2D; m in WGS84)
     - dateandtime (contains the time in datetime format)
     - tzinfo (the timezone; https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
     - WBGT_model_choice (which model to use: `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` models)
-    - geometry_choice (whether to use: `flat` or `canyon` geometry)
     - nref (defines the number of shortwave diffuse reflections as nref and the number of shortwave direct reflections as nref+1)
     - gamma_choice (whether to use: a gamma that is `prescribed` or modelled using `LAI`)
     - WBGT_equation_choice (whether to use: the `full` or approximate `ISO` WBGT equation)
@@ -1067,98 +1114,160 @@ def main(
       https://github.com/robwarrenwx/atmos/blob/main/atmos/thermo.py Twb method)
 
     Returns:
-    - Twb (wet bulb temperature; -; float/1D/2D; degC)
-    - solar_zen_deg (solar zenith angle; equivalent to \theta_0 in Shonk et al. (XXX); float/1D/2D; deg)
-    - solar_azi_deg (solar azimuth angle; -; float/1D/2D; deg)
-    - canyon_azi_deg (canyon azimuth angle; equivalent to \phi_0 in Shonk et al. (XXX); float/1D/2D; deg)
-    - Fs, Fr, Fw (sky/road/wall viewing fraction from the black globe; -; float/1D/2D; -)
-    - Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw (fraction of x viewed from y where x and y can be road r, wall w, or sky s, and Fxy; -; float/1D/2D; -)
-    - fr, fw (fraction of the road/wall illuminated by the direct beam; -; float/1D/2D; -)
-    - Fpr, Fpw (partial viewing fraction of the road/wall; -; float/1D/2D; -)
-    - Fprw1, Fprw2, Fpw1r, Fpw1w2 (view from partially illuminated x of the partially illuminated y where x and y can be road r, wall w, or sky s, and Fxy; -; float/1D/2D; -)
-    - Sr, Sw (diffuse flux from the road/wall; -; float/1D/2D; W m-2)
-    - K, Ks, Kr, Kw (shortwave diffuse total/sky/road/wall; -; float/1D/2D; W m-2)
-    - I (shortwave direct radiation received by the black globe; -; float/1D/2D; W m-2)
-    - L (longwave radiation incident on the black globe; -; float/1D/2D; W m-2)
-    - MRT (mean radiant temperature of the black globe; equivalent to T_{MRT} in Shonk et al. (XXX); float/1D/2D; degC)
-    - Tg (black globe temperature; -; float/1D/2D; degC)
-    - WBGT (wet bulb globe temperature; -; float/1D/2D; degC)
+    - Twb (wet bulb temperature; -; 0D/1D/2D; degC)
+    - solar_zen_deg (solar zenith angle; equivalent to \theta_0 in Shonk et al. (XXX); 0D/1D/2D; deg)
+    - solar_azi_deg (solar azimuth angle; -; 0D/1D/2D; deg)
+    - canyon_azi_deg (canyon azimuth angle; equivalent to \phi_0 in Shonk et al. (XXX); 0D/1D/2D; deg)
+    - Fs, Fr, Fw (sky/road/wall viewing fraction from the black globe; -; 0D/1D/2D; -)
+    - Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw (fraction of x viewed from y where x and y can be road r, wall w, or sky s, and Fxy; -; 0D/1D/2D; -)
+    - fr, fw (fraction of the road/wall illuminated by the direct beam; -; 0D/1D/2D; -)
+    - Fpr, Fpw (partial viewing fraction of the road/wall; -; 0D/1D/2D; -)
+    - Fprw1, Fprw2, Fpw1r, Fpw1w2 (view from partially illuminated x of the partially illuminated y where x and y can be road r, wall w, or sky s, and Fxy; -; 0D/1D/2D; -)
+    - Sr, Sw (diffuse flux from the road/wall; -; 0D/1D/2D; W m-2)
+    - K, Ks, Kr, Kw (shortwave diffuse total/sky/road/wall; -; 0D/1D/2D; W m-2)
+    - I (shortwave direct radiation received by the black globe; -; 0D/1D/2D; W m-2)
+    - L (longwave radiation incident on the black globe; -; 0D/1D/2D; W m-2)
+    - MRT (mean radiant temperature of the black globe; equivalent to T_{MRT} in Shonk et al. (XXX); 0D/1D/2D; degC)
+    - Tg (black globe temperature; -; 0D/1D/2D; degC)
+    - WBGT (wet bulb globe temperature; -; 0D/1D/2D; degC)
     """
 
-    # ensure these have the same shape as the grid (and do nothing if single point)
-    elevation = adjust_array_shape(elevation, lon)
-    H = adjust_array_shape(H, lon)
-    W = adjust_array_shape(W, lon)
-    X = adjust_array_shape(X, lon)
+    # make sure lon/lat are arrays
+    if isinstance(lon, float):
+        lon = np.array([lon])
+    if isinstance(lat, float):
+        lat = np.array([lat])
 
-    # Calculate RH and q if they do not already exist
-    if RH is not None and q is not None:
-        pass
-    elif RH is not None and q is None:
-        if P is None:
-            sys.exit("!!! If q is not provided then P must be !!!")            
-        q = q_from_RH(T,RH,P)
-    elif RH is None and q is not None:
-        if P is None:
-            sys.exit("!!! If RH is not provided then P must be !!!")
-        RH = RH_from_q(T,q,P)
+    # ensure these variables have the same shape
+    array_or_float_list = T, T_grnd, T_wall, RH, q, WS, P, Ld, Kd, Id, gamma, LAI, H, W, Z, X, tf, canyon_orient_deg, a_SW, a_LW,\
+    alb_grnd, alb_wall, emiss_grnd, emiss_wall, emiss_g, a_g, d, elevation
+    T, T_grnd, T_wall, RH, q, WS, P, Ld, Kd, Id, gamma, LAI, H, W, Z, X, tf, canyon_orient_deg, a_SW, a_LW,\
+    alb_grnd, alb_wall, emiss_grnd, emiss_wall, emiss_g, a_g, d, elevation = adjust_array_shape(array_or_float_list,lon)
+
+    # remove values with zero tile fraction and convert to 1D
+    array_list = [T, T_grnd, T_wall, RH, q, WS, P, Ld, Kd, Id, gamma, LAI, H, W, Z, X, tf, canyon_orient_deg, a_SW, a_LW,\
+    alb_grnd, alb_wall, emiss_grnd, emiss_wall, emiss_g, a_g, d, elevation, lon, lat]  
+    mask = tf == 0.
+    array_list_1d = []
+    for i, arr in enumerate(array_list):
+        processed_array = mask_and_1d(arr,mask)
+        array_list_1d.append(processed_array)
+    T, T_grnd, T_wall, RH, q, WS, P, Ld, Kd, Id, gamma, LAI, H, W, Z, X, tf, canyon_orient_deg, a_SW, a_LW,\
+    alb_grnd, alb_wall, emiss_grnd, emiss_wall, emiss_g, a_g, d, elevation, lon, lat = array_list_1d
+
+    # define geometry and the input_dict which contains the input variables for each geometry
+    if (tile_number != 8) and (tile_number != 9):
+        input_dict = {'flat' : array_list_1d}
     else:
-        sys.exit("!!! Neither RH or q provided !!!")
+        mask_H_less_than_Z = (H < Z)
+        if np.any(np.logical_and(mask_H_less_than_Z, (H > 0.))):
+            print("!!! Warning -- setting some H values to zero since they satisfied H < Z and H > 0 which is not allowed !!!")
+            H[mask_H_less_than_Z] = 0.
+        if np.all(mask_H_less_than_Z == True) == True:
+            input_dict = {'flat' : array_list_1d}
+        elif np.all(mask_H_less_than_Z == False) == True:
+            input_dict = {'canyon' : array_list_1d}
+        else:
+            array_list_1d_f = [array[mask_H_less_than_Z] if array is not None else array for array in array_list_1d]
+            array_list_1d_c = [array[~mask_H_less_than_Z] if array is not None else array for array in array_list_1d]
+            input_dict = {'flat' : array_list_1d_f, 'canyon' : array_list_1d_c}
+
+    # enter the loop where the WBGT calculations are done
+    output_dict = {}
+    for geometry in input_dict.keys():
+        T, T_grnd, T_wall, RH, q, WS, P, Ld, Kd, Id, gamma, LAI, H, W, Z, X, tf, canyon_orient_deg, a_SW, a_LW,\
+            alb_grnd, alb_wall, emiss_grnd, emiss_wall, emiss_g, a_g, d, elevation, lon, lat = input_dict[geometry]
+
+        # Calculate RH and q if they do not already exist
+        if RH is not None and q is not None:
+            pass
+        elif RH is not None and q is None:
+            if P is None:
+                sys.exit("!!! If q is not provided then P must be !!!")            
+            q = q_from_RH(T,RH,P)
+        elif RH is None and q is not None:
+            if P is None:
+                sys.exit("!!! If RH is not provided then P must be !!!")
+            RH = RH_from_q(T,q,P)
+        else:
+            sys.exit("!!! Neither RH or q provided !!!")
+            
+        # Twb calculation
+        if WBGT_model_choice == "UCanWBGT_outdoor" or WBGT_model_choice == "UCanWBGT_indoor":
+            Twb = Twb_func(T,RH,q,P,Twb_method)
+        elif WBGT_model_choice == "simpleWBGT":
+            Twb = None
+        else:   
+            sys.exit("!!! WBGT_model_choice can only be `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` !!!")
+
+        # shortwave calculations
+        if WBGT_model_choice == "UCanWBGT_outdoor":
+            zen, cazi, solar_zen_deg, solar_azi_deg, canyon_azi_deg = zen_and_cazi(lat,lon,elevation,dateandtime,canyon_orient_deg,tzinfo)
+            X = prevent_X_in_wall(X,W)
+            Fs, Fr, Fw = point2facet_view_fracs(H,W,Z,X,geometry)
+            Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw = facet2facet_view_fracs(H,W,geometry)
+            fr, fw = direct_illuminated_fractions(H,W,cazi,zen,geometry)
+            Fpr, Fpw = point2partial_view_fracs(H,W,Z,X,fr,fw,cazi,geometry)
+            Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s = partial2facet_view_fracs(H,W,fr,fw,geometry)
+            Sr, Sw = SrSw_func(Id,alb_grnd,alb_wall,zen,cazi)
+            K, Ks, Kr, Kw = K_func(Fs,Fr,Fw,Fsr,Frs,Fww,Fwr,Fws,Frw,Fsw,alb_grnd,alb_wall,Kd,Sr,Sw,Fpr,Fpw,Fprw1,Fprw2,Fpw1r,Fpw1w2,nref)
+            gamma = gamma_func(gamma,LAI,gamma_choice)
+            I = I_func(Id,H,W,Z,X,zen,cazi,gamma,geometry)
+        elif WBGT_model_choice == "UCanWBGT_indoor":
+            solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, fr, fw, Fpr, Fpw, Fprw1, Fprw2, \
+                Fpw1r, Fpw1w2, Sr, Sw, K, Ks, Kr, Kw, I = \
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, \
+                    None, None, None, 0., 0., 0., 0., 0.
+        elif WBGT_model_choice == "simpleWBGT":
+            solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, fr, fw, Fpr, Fpw, Fprw1, Fprw2, \
+                Fpw1r, Fpw1w2, Sr, Sw, K, Ks, Kr, Kw, I = \
+                None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, \
+                    None, None, None, None, None, None, None, None
+        else:
+            sys.exit("!!! main -- WBGT_model_choice can only be `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` !!!")
+
+        # longwave calculation
+        if WBGT_model_choice == "UCanWBGT_outdoor" or WBGT_model_choice == "UCanWBGT_indoor":
+            L = L_func(T_grnd,T_wall,Ld,emiss_grnd,emiss_wall,Fr,Fw,Fs,emiss_g,T,WBGT_model_choice)
+        elif WBGT_model_choice == "simpleWBGT":
+            L = None
+        else:   
+            sys.exit("!!! main -- WBGT_model_choice can only be `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` !!!")    
+
+        # mean radiant temperature and black globe temperature calculation
+        if WBGT_model_choice == "UCanWBGT_outdoor" or WBGT_model_choice == "UCanWBGT_indoor":
+            MRT = MRT_func(T,L,K,I,a_g,emiss_g,WBGT_model_choice)
+            Tg = Tg_func(T,MRT,WS,d,emiss_g,WBGT_model_choice)
+        elif WBGT_model_choice == "simpleWBGT":
+            MRT = None
+            Tg = None
+        else:   
+            sys.exit("!!! main -- WBGT_model_choice can only be `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` !!!")
         
-    # Twb calculation
-    if WBGT_model_choice == "UCanWBGT_outdoor" or WBGT_model_choice == "UCanWBGT_indoor":
-        Twb = Twb_func(T,RH,q,P,Twb_method)
-    elif WBGT_model_choice == "simpleWBGT":
-        Twb = None
-    else:   
-        sys.exit("!!! WBGT_model_choice can only be `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` !!!")
+        # WBGT calculation                                           
+        WBGT = WBGT_func(T,Twb,Tg,RH,L,K,I,a_g,a_LW,a_SW,WBGT_model_choice,WBGT_equation_choice)
 
-    # shortwave calculations
-    if WBGT_model_choice == "UCanWBGT_outdoor":
-        zen, cazi, solar_zen_deg, solar_azi_deg, canyon_azi_deg = zen_and_cazi(lat,lon,elevation,dateandtime,canyon_orient_deg,tzinfo)
-        X = prevent_X_in_wall(X,W)
-        Fs, Fr, Fw = point2facet_view_fracs(H,W,Z,X,geometry_choice)
-        Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw = facet2facet_view_fracs(H,W,geometry_choice)
-        fr, fw = direct_illuminated_fractions(H,W,cazi,zen,geometry_choice)
-        Fpr, Fpw = point2partial_view_fracs(H,W,Z,X,fr,fw,cazi,geometry_choice)
-        Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s = partial2facet_view_fracs(H,W,fr,fw,geometry_choice)
-        Sr, Sw = SrSw_func(Id,alb_grnd,alb_wall,zen,cazi)
-        K, Ks, Kr, Kw = K_func(Fs,Fr,Fw,Fsr,Frs,Fww,Fwr,Fws,Frw,Fsw,alb_grnd,alb_wall,Kd,Sr,Sw,Fpr,Fpw,Fprw1,Fprw2,Fpw1r,Fpw1w2,nref)
-        gamma = gamma_func(gamma,LAI,gamma_choice)
-        I = I_func(Id,H,W,Z,X,zen,cazi,gamma,geometry_choice)
-    elif WBGT_model_choice == "UCanWBGT_indoor":
-        solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, fr, fw, Fpr, Fpw, Fprw1, Fprw2, \
-            Fpw1r, Fpw1w2, Sr, Sw, K, Ks, Kr, Kw, I = \
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, \
-                None, None, None, 0., 0., 0., 0., 0.
-    elif WBGT_model_choice == "simpleWBGT":
-        solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, fr, fw, Fpr, Fpw, Fprw1, Fprw2, \
-            Fpw1r, Fpw1w2, Sr, Sw, K, Ks, Kr, Kw, I = \
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, \
-                None, None, None, None, None, None, None, None
+        output_dict[geometry] = Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
+            fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT
+
+    # now the calculations are finished get the output from output_dict and combine flat and canyon if necessary 
+    geometries = list(output_dict.keys())
+    if len(geometries) == 1:
+        array_or_float_list = output_dict[geometries[0]]
     else:
-        sys.exit("!!! main -- WBGT_model_choice can only be `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` !!!")
-
-    # longwave calculation
-    if WBGT_model_choice == "UCanWBGT_outdoor" or WBGT_model_choice == "UCanWBGT_indoor":
-        L = L_func(T_grnd,T_wall,Ld,emiss_grnd,emiss_wall,Fr,Fw,Fs,emiss_g,T,WBGT_model_choice)
-    elif WBGT_model_choice == "simpleWBGT":
-        L = None
-    else:   
-        sys.exit("!!! main -- WBGT_model_choice can only be `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` !!!")    
-
-    # mean radiant temperature and black globe temperature calculation
-    if WBGT_model_choice == "UCanWBGT_outdoor" or WBGT_model_choice == "UCanWBGT_indoor":
-        MRT = MRT_func(T,L,K,I,a_g,emiss_g,WBGT_model_choice)
-        Tg = Tg_func(T,MRT,WS,d,emiss_g,WBGT_model_choice)
-    elif WBGT_model_choice == "simpleWBGT":
-        MRT = None
-        Tg = None
-    else:   
-        sys.exit("!!! main -- WBGT_model_choice can only be `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` !!!")
+        non_none_arrays = [array for array in array_list_1d if array is not None]
+        max_size = max(len(array) for array in non_none_arrays)
+        array_or_float_list = [np.zeros(max_size) for i in range(len(output_dict[geometries[0]]))]
+        for geometry in geometries:
+            for i in range(len(array_or_float_list)):
+                if geometry == 'flat':
+                    array_or_float_list[i][mask_H_less_than_Z] = output_dict[geometry][i]
+                else:
+                    array_or_float_list[i][~mask_H_less_than_Z] = output_dict[geometry][i]
     
-    # WBGT calculation                                           
-    WBGT = WBGT_func(T,Twb,Tg,RH,L,K,I,a_g,a_LW,a_SW,WBGT_model_choice,WBGT_equation_choice)
+    # if originally 2D then convert from 1D back to 2D (and fill with zeros where tf = 0)
+    Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
+            fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT = put_array_shape_back(array_or_float_list, mask)
 
     return Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
             fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT
