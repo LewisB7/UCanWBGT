@@ -10,24 +10,10 @@ sys.path.append("/home/h04/lblunn/Documents/Projects/UCanWBGT")  # Add the direc
 import UCanWBGT
 import importlib
 importlib.reload(UCanWBGT)
-from parameters import (time, tzinfo, WBGT_model_choice, geometry_choice, nref, gamma_choice, WBGT_equation_choice,
+from parameters import (time, tzinfo, WBGT_model_choice, nref, gamma_choice, WBGT_equation_choice,
                         Twb_method, gamma, LAI, lat, lon, elevation, canyon_orient_deg, Z, H, W, X, tf,
                         tile_number, alb_grnd_tiles, alb_wall, emiss_grnd_tiles, emiss_wall,
                         emiss_g, a_g, d, a_SW, a_LW)
-
-### handling non-urban grid cells and H = 0:
-# - run UCanWBGT for each tile individually i.e., one tile must be selected
-# - convert all arguments to arrays of the same size unless None
-# - create a mask which is true where tile fraction is zero
-# - convert to 1D array with zero tile fraction values removed
-# - calculate UCanWBGT at grid cells where tile fraction > 0
-        # - if tile != 8 or 9 then set geometry_choice = flat
-        # - if tile == 8 or 9 then run twice ((i) and (ii))
-            # - and (i) H = 0 then set geometry_choice = flat
-            # - and (ii) H > 0 and Z < H then set geometry_choice = canyon
-            # - and (iii) H > 0 but Z > H then set to flat and give a warning (globe cannot be above canyon)
-        # - join (i) and (ii)
-# - put back to the original array shape
 
 ### Set Remaining Parameters ###
 
@@ -60,12 +46,38 @@ Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fw
         alb_grnd=alb_grnd, alb_wall=alb_wall, emiss_grnd=emiss_grnd, emiss_wall=emiss_wall,\
         emiss_g=emiss_g, a_g=a_g, d=d,\
         lat=lat, lon=lon, elevation=elevation, dateandtime=dateandtime, tzinfo=tzinfo,\
-        WBGT_model_choice=WBGT_model_choice, geometry_choice=geometry_choice, nref=nref,\
+        WBGT_model_choice=WBGT_model_choice, nref=nref,\
         gamma_choice=gamma_choice, WBGT_equation_choice=WBGT_equation_choice, Twb_method=Twb_method 
         )
+print("\n0D:")
 print(", ".join([f"Twb: {Twb}", f"solar_zen_deg: {solar_zen_deg}", f"solar_azi_deg: {solar_azi_deg}", f"canyon_azi_deg: {canyon_azi_deg}", f"Fs: {Fs}", f"Fr: {Fr}", f"Fw: {Fw}", f"Fsr: {Fsr}", f"Frs: {Frs}", f"Fww: {Fww}", f"Fwr: {Fwr}", f"Fws: {Fws}", f"Frw: {Frw}", f"Fsw: {Fsw}", f"fr: {fr}", f"fw: {fw}", f"Fpr: {Fpr}", f"Fpw: {Fpw}", f"Fprw1: {Fprw1}", f"Fprw2: {Fprw2}", f"Fpw1r: {Fpw1r}", f"Fpw1w2: {Fpw1w2}", f"Sr: {Sr}", f"Sw: {Sw}", f"K: {K}", f"Ks: {Ks}", f"Kr: {Kr}", f"Kw: {Kw}", f"I: {I}", f"L: {L}", f"MRT: {MRT}", f"Tg: {Tg}", f"WBGT: {WBGT}"]))
 
+### UCanWBGT 1D example ###
+
+lon = np.array([lon,lon])
+lat = np.array([lat,lat])
+
+# calculate WBGT
+Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
+    fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT \
+        = UCanWBGT.main(
+        T=T, T_grnd=T_grnd, T_wall=T_wall, RH=RH, q=None, WS=WS, P=P, Ld=Ld, Kd=Kd, Id=Id,\
+        gamma=gamma, LAI=LAI,\
+        H=H, W=W, Z=Z, X=X, tile_number=tile_number, tf=tf, canyon_orient_deg=canyon_orient_deg,\
+        a_SW=a_SW, a_LW=a_LW,\
+        alb_grnd=alb_grnd, alb_wall=alb_wall, emiss_grnd=emiss_grnd, emiss_wall=emiss_wall,\
+        emiss_g=emiss_g, a_g=a_g, d=d,\
+        lat=lat, lon=lon, elevation=elevation, dateandtime=dateandtime, tzinfo=tzinfo,\
+        WBGT_model_choice=WBGT_model_choice, nref=nref,\
+        gamma_choice=gamma_choice, WBGT_equation_choice=WBGT_equation_choice, Twb_method=Twb_method 
+        )
+print("\n1D:")
+print(", ".join([f"Twb: {Twb}", f"solar_zen_deg: {solar_zen_deg}", f"solar_azi_deg: {solar_azi_deg}", f"canyon_azi_deg: {canyon_azi_deg}", f"Fs: {Fs}", f"Fr: {Fr}", f"Fw: {Fw}", f"Fsr: {Fsr}", f"Frs: {Frs}", f"Fww: {Fww}", f"Fwr: {Fwr}", f"Fws: {Fws}", f"Frw: {Frw}", f"Fsw: {Fsw}", f"fr: {fr}", f"fw: {fw}", f"Fpr: {Fpr}", f"Fpw: {Fpw}", f"Fprw1: {Fprw1}", f"Fprw2: {Fprw2}", f"Fpw1r: {Fpw1r}", f"Fpw1w2: {Fpw1w2}", f"Sr: {Sr}", f"Sw: {Sw}", f"K: {K}", f"Ks: {Ks}", f"Kr: {Kr}", f"Kw: {Kw}", f"I: {I}", f"L: {L}", f"MRT: {MRT}", f"Tg: {Tg}", f"WBGT: {WBGT}"]))
+
+
 ### UCanWBGT 2D example ###
+
+print("\n2D plot:")
 
 # Overwrite lat, lon, elevation
 num_points = 20
@@ -113,10 +125,10 @@ Id = 800.*cos_zen
 P = 101325.0
 
 tf = np.zeros((num_points, num_points)) + tf
-tf[::8,::2] = 0.
+tf[::3,::3] = 0.
 
-#H = np.zeros((num_points, num_points)) + H
-#H[::2,::8] = 10.
+H = np.zeros((num_points, num_points)) + H
+H[::2,::2] = 1.
 
 # calculate WBGT
 Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
@@ -129,7 +141,7 @@ Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fw
         alb_grnd=alb_grnd, alb_wall=alb_wall, emiss_grnd=emiss_grnd, emiss_wall=emiss_wall,\
         emiss_g=emiss_g, a_g=a_g, d=d,\
         lat=lat, lon=lon, elevation=elevation, dateandtime=dateandtime, tzinfo=tzinfo,\
-        WBGT_model_choice=WBGT_model_choice, geometry_choice=geometry_choice, nref=nref,\
+        WBGT_model_choice=WBGT_model_choice, nref=nref,\
         gamma_choice=gamma_choice, WBGT_equation_choice=WBGT_equation_choice, Twb_method=Twb_method
         )
 

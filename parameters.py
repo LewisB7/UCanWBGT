@@ -5,7 +5,6 @@ UCanWBGT heat index calculation parameters.
 time = "20240621T1200Z" # time UTC
 tzinfo = "UTC" # timezones https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 WBGT_model_choice = "UCanWBGT_outdoor" # whether to use `UCanWBGT_outdoor`, `UCanWBGT_indoor`, or `simpleWBGT` model
-geometry_choice = "canyon" # whether to use canyon or flat geometry
 nref = 2 # defines the number of shortwave diffuse reflections as nref and the number of shortwave direct reflections as nref+1
 gamma_choice = "prescribe" # whether to use a gamma direct beam attenuation factor that is `prescribed` or modelled using `LAI`
 WBGT_equation_choice = "full" # whether to use the `full` or approximate `ISO` WBGT equation
