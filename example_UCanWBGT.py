@@ -11,9 +11,23 @@ import UCanWBGT
 import importlib
 importlib.reload(UCanWBGT)
 from parameters import (time, tzinfo, WBGT_model_choice, geometry_choice, nref, gamma_choice, WBGT_equation_choice,
-                        Twb_method, gamma, LAI, lat, lon, elevation, canyon_orient_deg, Z, H, W, X,
+                        Twb_method, gamma, LAI, lat, lon, elevation, canyon_orient_deg, Z, H, W, X, tf,
                         tile_number, alb_grnd_tiles, alb_wall, emiss_grnd_tiles, emiss_wall,
                         emiss_g, a_g, d, a_SW, a_LW)
+
+### handling non-urban grid cells and H = 0:
+# - run UCanWBGT for each tile individually i.e., one tile must be selected
+# - convert all arguments to arrays of the same size unless None
+# - create a mask which is true where tile fraction is zero
+# - convert to 1D array with zero tile fraction values removed
+# - calculate UCanWBGT at grid cells where tile fraction > 0
+        # - if tile != 8 or 9 then set geometry_choice = flat
+        # - if tile == 8 or 9 then run twice ((i) and (ii))
+            # - and (i) H = 0 then set geometry_choice = flat
+            # - and (ii) H > 0 and Z < H then set geometry_choice = canyon
+            # - and (iii) H > 0 but Z > H then set to flat and give a warning (globe cannot be above canyon)
+        # - join (i) and (ii)
+# - put back to the original array shape
 
 ### Set Remaining Parameters ###
 
@@ -41,7 +55,7 @@ Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fw
         = UCanWBGT.main(
         T=T, T_grnd=T_grnd, T_wall=T_wall, RH=RH, q=None, WS=WS, P=P, Ld=Ld, Kd=Kd, Id=Id,\
         gamma=gamma, LAI=LAI,\
-        H=H, W=W, Z=Z, X=X, canyon_orient_deg=canyon_orient_deg,\
+        H=H, W=W, Z=Z, X=X, tile_number=tile_number, tf=tf, canyon_orient_deg=canyon_orient_deg,\
         a_SW=a_SW, a_LW=a_LW,\
         alb_grnd=alb_grnd, alb_wall=alb_wall, emiss_grnd=emiss_grnd, emiss_wall=emiss_wall,\
         emiss_g=emiss_g, a_g=a_g, d=d,\
@@ -64,7 +78,7 @@ min_lon = -180 + dlon/2.
 max_lon = 180 - dlon/2.
 longitude = np.linspace(min_lon, max_lon, num_points)
 lon, lat = np.meshgrid(longitude, latitude)
-elevation = UCanWBGT.adjust_array_shape(elevation, lon)
+elevation = UCanWBGT.adjust_array_shape([elevation], lon)[0]
 
 # Calculate zenith angle to make radiation forcing variables semi-plausible
 zen, cazi, solar_zen_deg, solar_azi_deg, canyon_azi_deg = \
@@ -98,13 +112,19 @@ Id = 800.*cos_zen
 
 P = 101325.0
 
+tf = np.zeros((num_points, num_points)) + tf
+tf[::8,::2] = 0.
+
+#H = np.zeros((num_points, num_points)) + H
+#H[::2,::8] = 10.
+
 # calculate WBGT
 Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
     fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT \
         = UCanWBGT.main(
         T=T, T_grnd=T_grnd, T_wall=T_wall, RH=RH, q=None, WS=WS, P=P, Ld=Ld, Kd=Kd, Id=Id,\
         gamma=gamma, LAI=LAI,\
-        H=H, W=W, Z=Z, X=X, canyon_orient_deg=canyon_orient_deg,\
+        H=H, W=W, Z=Z, X=X, tile_number=tile_number, tf=tf, canyon_orient_deg=canyon_orient_deg,\
         a_SW=a_SW, a_LW=a_LW,\
         alb_grnd=alb_grnd, alb_wall=alb_wall, emiss_grnd=emiss_grnd, emiss_wall=emiss_wall,\
         emiss_g=emiss_g, a_g=a_g, d=d,\

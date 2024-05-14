@@ -10,7 +10,7 @@ from constants import (Rd, Rv, eps, cpd, cpv, cpl, cpi, p_ref,
 UCanWBGT heat index calculation functions.
 """
 
-def adjust_array_shape(array_or_float, reference):
+def adjust_array_shape(array_or_float_list, reference):
     """
     Adjust the shape of the input array or float to match the shape of the reference array.
     If the input is a float, it will be repeated to create an array with the same shape as the reference.
@@ -23,13 +23,40 @@ def adjust_array_shape(array_or_float, reference):
     - array_or_float (The adjusted array or float; numpy.ndarray or float)     
     """
 
-    if isinstance(array_or_float, np.ndarray) and isinstance(reference, np.ndarray):
-        if array_or_float.shape != reference.shape:
-            return array_or_float
-    elif isinstance(array_or_float, float) and hasattr(reference, 'shape'):
-        return np.full_like(reference, array_or_float)
-    
-    return array_or_float
+    out_list = []
+    for i in range(len(array_or_float_list)):
+        array_or_float = array_or_float_list[i]
+        if array_or_float is None:
+            pass
+        else:
+            if isinstance(array_or_float, float):
+                array_or_float = np.array([array_or_float])
+            if (array_or_float.shape != reference.shape):
+                array_or_float = np.full_like(reference, array_or_float)
+        out_list.append(array_or_float)
+
+    return out_list
+
+def mask_and_1d(arr,mask):
+
+    if arr is None:
+        arr = None
+    else:
+        arr_without_zeros = arr[~mask]
+        arr = arr_without_zeros.flatten()
+
+    return arr
+
+def put_array_shape_back(array_or_float_list, mask):
+
+    out_list = []
+    for i in range(len(array_or_float_list)):
+        result_1d = array_or_float_list[i]
+        result = np.zeros(np.shape(mask))
+        result[~mask] = result_1d
+        out_list.append(result)
+
+    return out_list
 
 def q_from_RH(T,RH,P):
     """
@@ -1014,7 +1041,7 @@ def WBGT_func(T,Twb,Tg,RH,L,K,I,a_g,a_LW,a_SW,WBGT_model_choice,WBGT_equation_ch
 def main(
     T=None, T_grnd=None, T_wall=None, RH=None, q=None, WS=None, P=None, Ld=None, Kd=None, Id=None,\
     gamma=None, LAI=None,\
-    H=None, W=None, Z=None, X=None, canyon_orient_deg=None,\
+    H=None, W=None, Z=None, X=None, tile_number=None, tf=None, canyon_orient_deg=None,\
     a_SW=None, a_LW=None,\
     alb_grnd=None, alb_wall=None, emiss_grnd=None, emiss_wall=None,\
     emiss_g=None, a_g=None, d=None,\
@@ -1042,6 +1069,8 @@ def main(
     - W (canyon width; -; float/1D/2D; m)
     - Z (black globe height; -; float/1D/2D; m)
     - X (black globe horizontal distance right of the centre line; -; float/1D/2D; m)
+    - tile_number (tile number; -; int; 0-9)
+    - tf (tile fraction; -; float/1D/2D; -)
     - canyon_orient_deg (canyon orientation angle defined as the horizontal angle measured clockwise from north to a
       line running parallel to the alignment of the street canyon; -; float/1D/2D; deg)
     - a_SW (shortwave absorptivity of a human; -; float; -)
@@ -1085,11 +1114,47 @@ def main(
     - WBGT (wet bulb globe temperature; -; float/1D/2D; degC)
     """
 
-    # ensure these have the same shape as the grid (and do nothing if single point)
-    elevation = adjust_array_shape(elevation, lon)
-    H = adjust_array_shape(H, lon)
-    W = adjust_array_shape(W, lon)
-    X = adjust_array_shape(X, lon)
+    # make sure lon/lat are arrays
+    if isinstance(lon, float):
+        lon = np.array([lon])
+    if isinstance(lat, float):
+        lat = np.array([lat])
+
+    # ensure all have the same shape
+    array_or_float_list = T, T_grnd, T_wall, RH, q, WS, P, Ld, Kd, Id, gamma, LAI, H, W, Z, X, tf, canyon_orient_deg, a_SW, a_LW,\
+    alb_grnd, alb_wall, emiss_grnd, emiss_wall, emiss_g, a_g, d, elevation
+    T, T_grnd, T_wall, RH, q, WS, P, Ld, Kd, Id, gamma, LAI, H, W, Z, X, tf, canyon_orient_deg, a_SW, a_LW,\
+    alb_grnd, alb_wall, emiss_grnd, emiss_wall, emiss_g, a_g, d, elevation = adjust_array_shape(array_or_float_list,lon)
+
+    # remove values with zero tile fraction and convert to 1D
+    array_list = [T, T_grnd, T_wall, RH, q, WS, P, Ld, Kd, Id, gamma, LAI, H, W, Z, X, tf, canyon_orient_deg, a_SW, a_LW,\
+    alb_grnd, alb_wall, emiss_grnd, emiss_wall, emiss_g, a_g, d, elevation, lon, lat]  
+    mask = tf == 0.
+    array_list_1d = []
+    for i, arr in enumerate(array_list):
+        processed_array = mask_and_1d(arr,mask)
+        array_list_1d.append(processed_array)
+    T, T_grnd, T_wall, RH, q, WS, P, Ld, Kd, Id, gamma, LAI, H, W, Z, X, tf, canyon_orient_deg, a_SW, a_LW,\
+    alb_grnd, alb_wall, emiss_grnd, emiss_wall, emiss_g, a_g, d, elevation, lon, lat = array_list_1d
+
+    # find if there is a mixture of canyon and flat
+    # make a dictionary containing canyon, flat or both, containing the variables split in two
+    # loop over the number of keys
+        # run the routine saving the output to a dictionary
+    # combine the arrays back into one 1d array if both
+
+    # loop over the code twice if some values are canyon and flat
+    # split the 1d arrays into two 1d arrays where True and False
+    # - if tile != 8 or 9 then set geometry_choice = flat
+    # - if tile == 8 or 9 then run twice ((i) and (ii))
+        # - and (i) H = 0 then set geometry_choice = flat
+        # - and (ii) H > 0 and Z < H then set geometry_choice = canyon
+        # - and (iii) H > 0 but Z > H then set to flat and give a warning (globe cannot be above canyon)
+    
+    #if (tile_number == 8) or (tile_number == 9):
+    #    geometry_choice = 'canyon'
+    #else:
+    #    geometry_choice = 'flat'
 
     # Calculate RH and q if they do not already exist
     if RH is not None and q is not None:
@@ -1159,6 +1224,13 @@ def main(
     
     # WBGT calculation                                           
     WBGT = WBGT_func(T,Twb,Tg,RH,L,K,I,a_g,a_LW,a_SW,WBGT_model_choice,WBGT_equation_choice)
+
+    # if originally 2D then convert from 1D back to 2D (and fill with zeros where tf = 0)
+    array_or_float_list = Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
+            fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT
+    Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
+            fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT = put_array_shape_back(array_or_float_list, mask)
+
 
     return Twb, solar_zen_deg, solar_azi_deg, canyon_azi_deg, Fs, Fr, Fw, Fsr, Frs, Fww, Fwr, Fws, Frw, Fsw, \
             fr, fw, Fpr, Fpw, Fprw1, Fprw2, Fprs, Fpw1r, Fpw1w2, Fpw1s, Sr, Sw, K, Ks, Kr, Kw, I, L, MRT, Tg, WBGT

@@ -19,6 +19,7 @@ Z = 1.5 # black globe height (m)
 H = 10.0 # canyon height (m)
 W = 10.0 # canyon width (m)
 X = 0.0 # black globe position where 0.0 is the centre and positive/negative values are to right/left of centre (m)
+tf = 1.0 # tile fraction (should be one by default -- if provided as an array with the same dimensions as lat/lon then zero values will be ignored in the calculation)
 canyon_orient_deg = 0.0 # the horizontal angle measured clockwise from north to a line running parallel to the alignment of the street canyon
 tile_number = 8 # which tile to use (note: if tiles 8 or 9 are selected the calculation will be for the urban area using tiles 8 and 9). 0: Broad Leaf Tree, 1: Needle Leaf Tree, 2: C3 Grass, 3: C4 Grass, 4: Shrub, 5: Inland Water, 6: Bare Soil, 7: Ice, 8: Urban Canyon, 9: Urban Roof
 alb_grnd_tiles = [0.143,0.088,0.176,0.16,0.193,0.06,0.1,0.75,0.08,0.18] # MORUSES 10 tile albedo values
