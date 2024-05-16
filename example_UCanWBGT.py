@@ -182,40 +182,56 @@ ax7.set_extent(extent, crs=ccrs.PlateCarree())
 ax8.set_extent(extent, crs=ccrs.PlateCarree())
 
 # contours
-vmin = np.min(T)
-vmax = np.max(T)
+vmin = np.nanmin(T)
+vmax = np.nanmax(T)
+cmap = plt.cm.hot_r
+ax0.set_facecolor(color='gray')
 c0 = ax0.pcolormesh(lon, lat, T,
-                   cmap='hot_r', vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
-vmin = np.min(RH)
-vmax = np.max(RH)
+                   cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+vmin = np.nanmin(RH)
+vmax = np.nanmax(RH)
+cmap = plt.cm.Blues
+ax1.set_facecolor(color='gray')
 c1 = ax1.pcolormesh(lon, lat, RH,
-                   cmap='gray_r', vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
-vmin = np.min(WS)
-vmax = np.max(WS)
+                   cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+vmin = np.nanmin(WS)
+vmax = np.nanmax(WS)
+cmap = plt.cm.jet
+ax2.set_facecolor(color='gray')
 c2 = ax2.pcolormesh(lon, lat, WS,
-                   cmap='gray', transform=ccrs.PlateCarree())
-vmin = np.min(Twb)
-vmax = np.max(Twb)
+                   cmap=cmap, transform=ccrs.PlateCarree())
+vmin = np.nanmin(Twb)
+vmax = np.nanmax(Twb)
+cmap = plt.cm.hot_r
+ax3.set_facecolor(color='gray')
 c3 = ax3.pcolormesh(lon, lat, Twb,
-                   cmap='hot_r', vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
-vmin = np.min(MRT)
-vmax = np.max(MRT)
+                   cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+vmin = np.nanmin(MRT)
+vmax = np.nanmax(MRT)
+cmap = plt.cm.hot_r
+ax4.set_facecolor(color='gray')
 c4 = ax4.pcolormesh(lon, lat, MRT,
-                   cmap='hot_r', vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
-vmin = np.min(Tg)
-vmax = np.max(Tg)
+                   cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+vmin = np.nanmin(Tg)
+vmax = np.nanmax(Tg)
+cmap = plt.cm.hot_r
+ax5.set_facecolor(color='gray')
 c5 = ax5.pcolormesh(lon, lat, Tg,
-                   cmap='hot_r', vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+                   cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+cmap = plt.cm.seismic_r
+ax6.set_facecolor(color='gray')
 c6 = ax6.contourf(lon, lat, solar_zen_deg,
-                   cmap='gray', levels=np.linspace(0., 180., 20),
-                   transform=ccrs.PlateCarree())
+                 cmap=cmap, levels=np.linspace(0., 180., 20), transform=ccrs.PlateCarree())
+cmap = plt.cm.hsv
+ax7.set_facecolor(color='gray')
 c7 = ax7.contourf(lon, lat, canyon_azi_deg,
-                   cmap='hsv', levels=np.linspace(0., 360., 20),
-                   transform=ccrs.PlateCarree())
-vmin = np.min(WBGT)
-vmax = np.max(WBGT)
+                 cmap=cmap, levels=np.linspace(0., 360., 20), transform=ccrs.PlateCarree())
+vmin = np.nanmin(WBGT)
+vmax = np.nanmax(WBGT)
+cmap = plt.cm.hot_r
+ax8.set_facecolor(color='gray')
 c8 = ax8.pcolormesh(lon, lat, WBGT,
-                   cmap='hot_r', vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+                   cmap=cmap, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
 
 # gridlines
 gl0 = ax0.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
