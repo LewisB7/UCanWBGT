@@ -28,7 +28,7 @@ def adjust_array_shape(array_or_float_list, reference):
         if array_or_float is None:
             pass
         else:
-            if isinstance(array_or_float, float):
+            if isinstance(array_or_float, (int, float, np.float64)):
                 array_or_float = np.array([array_or_float])
             if (array_or_float.shape != reference.shape):
                 array_or_float = np.full_like(reference, array_or_float)
@@ -71,7 +71,7 @@ def put_array_shape_back(array_or_float_list, mask):
     out_list = []
     for i in range(len(array_or_float_list)):
         before = array_or_float_list[i]
-        after = np.zeros(np.shape(mask))
+        after = np.full(np.shape(mask), np.nan)
         after[~mask] = before
         out_list.append(after)
 
@@ -1160,9 +1160,13 @@ def main(
         input_dict = {'flat' : array_list_1d}
     else:
         mask_H_less_than_Z = (H < Z)
-        if np.any(np.logical_and(mask_H_less_than_Z, (H > 0.))):
+        mask_H_less_than_Z_and_gn_0 = np.logical_and(mask_H_less_than_Z, (H > 0.))
+        if np.any(mask_H_less_than_Z_and_gn_0):
             print("!!! Warning -- setting some H values to zero since they satisfied H < Z and H > 0 which is not allowed !!!")
             H[mask_H_less_than_Z] = 0.
+            num_H_less_than_Z_and_gn_0_true = np.count_nonzero(mask_H_less_than_Z_and_gn_0)
+            num_H_less_than_Z_true = np.count_nonzero(mask_H_less_than_Z)
+            print(f"!!! {100 * num_H_less_than_Z_and_gn_0_true / num_H_less_than_Z_true}% of Z < H points had H > 0 !!!")
         if np.all(mask_H_less_than_Z == True) == True:
             input_dict = {'flat' : array_list_1d}
         elif np.all(mask_H_less_than_Z == False) == True:
