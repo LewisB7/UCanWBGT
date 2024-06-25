@@ -12,3 +12,4 @@ dependencies:
   - mo_pack
   - pvlib
   - pytz
+  - xarray
